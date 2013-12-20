@@ -20,6 +20,8 @@ const (
 	defaultConnectTimeout = 10000 // milliseconds
 )
 
+type loadTLSConfigFn func(crtPath, keyPath string) (*tls.Config, error)
+
 type Options struct {
 	configPath string
 }
@@ -33,6 +35,7 @@ type Frontend struct {
 	Backends []Backend `yaml:"backends"`
 	Strategy string    `yaml:"strategy"`
 	TLSCrt   string    `yaml:"tls_crt"`
+	mux *vhost.TLSMuxer
 	TLSKey   string    `yaml:"tls_key"`
 
 	strategy  BackendStrategy `yaml:"-"`
@@ -47,9 +50,14 @@ type Configuration struct {
 type Server struct {
 	*log.Logger
 	*Configuration
+	wait sync.WaitGroup
+
+	// these are for easier testing
+	mux *vhost.TLSMuxer
+	ready chan int
 }
 
-func (s *Server) Start() {
+func (s *Server) Run() {
 	// bind a port to handle TLS connections
 	l, err := net.Listen("tcp", s.Configuration.BindAddr)
 	if err != nil {
@@ -58,25 +66,39 @@ func (s *Server) Start() {
 	s.Printf("Serving connections on %v", l.Addr())
 
 	// start muxing on it
-	lmux, err := vhost.NewTLSMuxer(l, muxTimeout)
+	s.mux, err = vhost.NewTLSMuxer(l, muxTimeout)
 	if err != nil {
 		panic(err)
 	}
 
+	// wait for all frontends to finish
+	s.wait.Add(len(s.Frontends))
+
 	// setup muxing for each frontend
 	for name, front := range s.Frontends {
-		fl, err := lmux.Listen(name)
+		fl, err := s.mux.Listen(name)
 		if err != nil {
 			panic(err)
 		}
-		go s.RunFrontend(name, front, fl)
+		go s.runFrontend(name, front, fl)
 	}
 
 	// use the default error handler
-	go lmux.HandleErrors()
+	go s.mux.HandleErrors()
+
+	// we're ready, signal it for testing
+	if s.ready != nil {
+		close(s.ready)
+	}
+
+	s.wait.Wait()
 }
 
-func (s *Server) RunFrontend(name string, front *Frontend, l net.Listener) {
+func (s *Server) runFrontend(name string, front *Frontend, l net.Listener) {
+	// mark finished when done so Run() can return
+	defer s.wait.Done()
+
+	// always round-robin strategy for now
 	front.strategy = &RoundRobinStrategy{backends: front.Backends}
 
 	s.Printf("Handling connections to %v", name)
@@ -159,7 +181,6 @@ func (s *RoundRobinStrategy) NextBackend() Backend {
 	}
 }
 
-
 func parseArgs() (*Options, error) {
 	flag.Parse()
 
@@ -173,19 +194,11 @@ func parseArgs() (*Options, error) {
 
 }
 
-func readConfig(configPath string) (config *Configuration, err error) {
-	configBuf, err := ioutil.ReadFile(configPath)
-	if err != nil {
-		// failure to read a configuration file is only a fatal error if
-		// the user specified one explicitly
-		err = fmt.Errorf("Failed to read configuration file %s: %v", configPath, err)
-		return
-	}
-
+func parseConfig(configBuf []byte, loadTLS loadTLSConfigFn) (config *Configuration, err error) {
 	// deserialize/parse the config
 	config = new(Configuration)
 	if err = goyaml.Unmarshal(configBuf, &config); err != nil {
-		err = fmt.Errorf("Error parsing configuration file %s: %v", configPath, err)
+		err = fmt.Errorf("Error parsing configuration file: %v", err)
 		return
 	}
 
@@ -218,7 +231,7 @@ func readConfig(configPath string) (config *Configuration, err error) {
 		}
 
 		if front.TLSCrt != "" || front.TLSKey != "" {
-			if front.tlsConfig, err = loadTLSConfig(front.TLSCrt, front.TLSKey); err != nil {
+			if front.tlsConfig, err = loadTLS(front.TLSCrt, front.TLSKey); err != nil {
 				err = fmt.Errorf("Failed to load TLS configuration for frontend '%v': %v", name, err)
 				return
 			}
@@ -240,24 +253,34 @@ func loadTLSConfig(crtPath, keyPath string) (*tls.Config, error) {
 }
 
 func main() {
+	// parse command line options
 	opts, err := parseArgs()
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	config, err := readConfig(opts.configPath)
+	// read configuration file
+	configBuf, err := ioutil.ReadFile(opts.configPath)
+	if err != nil {
+		fmt.Printf("Failed to read configuration file %s: %v", opts.configPath, err)
+		os.Exit(1)
+	}
+	fmt.Printf("Read configuration file at: %s", opts.configPath)
+
+
+	// parse configuration file
+	config, err := parseConfig(configBuf, loadTLSConfig)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
+	// run server
 	s := &Server{
 		Configuration: config,
 		Logger:        log.New(os.Stdout, "slt ", log.LstdFlags|log.Lshortfile),
 	}
 
-	s.Start()
-
-	select {}
+	s.Run()
 }
