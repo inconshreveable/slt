@@ -35,8 +35,8 @@ type Frontend struct {
 	Backends []Backend `yaml:"backends"`
 	Strategy string    `yaml:"strategy"`
 	TLSCrt   string    `yaml:"tls_crt"`
-	mux *vhost.TLSMuxer
-	TLSKey   string    `yaml:"tls_key"`
+	mux      *vhost.TLSMuxer
+	TLSKey   string `yaml:"tls_key"`
 
 	strategy  BackendStrategy `yaml:"-"`
 	tlsConfig *tls.Config     `yaml:"-"`
@@ -53,7 +53,7 @@ type Server struct {
 	wait sync.WaitGroup
 
 	// these are for easier testing
-	mux *vhost.TLSMuxer
+	mux   *vhost.TLSMuxer
 	ready chan int
 }
 
@@ -83,8 +83,25 @@ func (s *Server) Run() {
 		go s.runFrontend(name, front, fl)
 	}
 
-	// use the default error handler
-	go s.mux.HandleErrors()
+	// custom error handler so we can log errors
+	go func() {
+		for {
+			conn, err := s.mux.NextError()
+
+			if conn == nil {
+				s.Printf("Failed to mux next connection, error: %v", err)
+				if _, ok := err.(vhost.Closed); ok {
+					return
+				} else {
+					continue
+				}
+			} else {
+				s.Printf("Failed to mux connection from %v, error: %v", conn.RemoteAddr(), err)
+				// XXX: respond with valid TLS close messages
+				conn.Close()
+			}
+		}
+	}()
 
 	// we're ready, signal it for testing
 	if s.ready != nil {
@@ -267,7 +284,6 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Printf("Read configuration file at: %s", opts.configPath)
-
 
 	// parse configuration file
 	config, err := parseConfig(configBuf, loadTLSConfig)

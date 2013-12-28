@@ -58,5 +58,8 @@ Running slt is also simple. It takes a single argument, the path to the configur
 # Building it
 Just cd into the directory and "go build". It requires Go 1.1+.
 
+# Testing it
+Just cd into the directory and "go test".
+
 # Stability
 I run slt in production handling hundreds of thousands of connections daily.

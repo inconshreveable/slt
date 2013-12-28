@@ -1,13 +1,13 @@
 package main
 
 import (
-	"testing"
-	"net"
-	"io/ioutil"
-	"log"
 	"crypto/tls"
 	"fmt"
+	"io/ioutil"
+	"log"
+	"net"
 	"reflect"
+	"testing"
 )
 
 var snakeoilCert = `-----BEGIN CERTIFICATE-----
@@ -47,7 +47,7 @@ func loadSnakeoilConfig(crtPath, keyPath string) (*tls.Config, error) {
 		return nil, err
 	}
 
-	return &tls.Config{Certificates:[]tls.Certificate{cert}}, nil
+	return &tls.Config{Certificates: []tls.Certificate{cert}}, nil
 }
 
 func backendOrFail(t *testing.T) (net.Listener, string) {
@@ -72,8 +72,8 @@ func mkServer(t *testing.T, cfgString string) *Server {
 
 	return &Server{
 		Configuration: config,
-		Logger: log.New(ioutil.Discard, "", 0),
-		ready: make(chan int),
+		Logger:        log.New(ioutil.Discard, "", 0),
+		ready:         make(chan int),
 	}
 }
 
@@ -221,7 +221,7 @@ frontends:
 
 	payload := "Hello world!"
 	go func() {
-		for i:=0; i<20; i++ {
+		for i := 0; i < 20; i++ {
 			out, err := tls.Dial("tcp", "127.0.0.1:55111", &tls.Config{ServerName: "test.example.com", InsecureSkipVerify: true})
 			if err != nil {
 				t.Fatalf("Failed to dial: %v", err)
@@ -235,7 +235,7 @@ frontends:
 	var count1, count2 int
 
 	var l net.Listener = l1
-	for i:=0; i<20; i++ {
+	for i := 0; i < 20; i++ {
 		// conections should switch off between backends
 		if l == l1 {
 			l = l2
@@ -296,7 +296,6 @@ frontends:
 	// wait for the listener to bind
 	<-s.ready
 	defer s.mux.Close()
-
 
 	expected := []byte("Hello World")
 	go func() {
