@@ -37,6 +37,7 @@ type Frontend struct {
 	TLSCrt   string    `yaml:"tls_crt"`
 	mux      *vhost.TLSMuxer
 	TLSKey   string `yaml:"tls_key"`
+	Default bool `yaml:"default"`
 
 	strategy  BackendStrategy `yaml:"-"`
 	tlsConfig *tls.Config     `yaml:"-"`
@@ -45,6 +46,7 @@ type Frontend struct {
 type Configuration struct {
 	BindAddr  string               `yaml:"bind_addr"`
 	Frontends map[string]*Frontend `yaml:"frontends"`
+	defaultFrontend *Frontend
 }
 
 type Server struct {
@@ -96,9 +98,13 @@ func (s *Server) Run() {
 					continue
 				}
 			} else {
-				s.Printf("Failed to mux connection from %v, error: %v", conn.RemoteAddr(), err)
-				// XXX: respond with valid TLS close messages
-				conn.Close()
+				if _, ok := err.(vhost.NotFound); ok && s.defaultFrontend != nil {
+					go s.proxyConnection(conn, s.defaultFrontend)
+				} else {
+					s.Printf("Failed to mux connection from %v, error: %v", conn.RemoteAddr(), err)
+					// XXX: respond with valid TLS close messages
+					conn.Close()
+				}
 			}
 		}
 	}()
@@ -133,17 +139,17 @@ func (s *Server) runFrontend(name string, front *Frontend, l net.Listener) {
 		}
 		s.Printf("Accepted new connection for %v from %v", name, conn.RemoteAddr())
 
-		// unwrap if tls cert/key was specified
-		if front.tlsConfig != nil {
-			conn = tls.Server(conn, front.tlsConfig)
-		}
-
 		// proxy the connection to an backend
 		go s.proxyConnection(conn, front)
 	}
 }
 
 func (s *Server) proxyConnection(c net.Conn, front *Frontend) (err error) {
+	// unwrap if tls cert/key was specified
+	if front.tlsConfig != nil {
+		c = tls.Server(c, front.tlsConfig)
+	}
+
 	// pick the backend
 	backend := front.strategy.NextBackend()
 
@@ -234,6 +240,14 @@ func parseConfig(configBuf []byte, loadTLS loadTLSConfigFn) (config *Configurati
 		if len(front.Backends) == 0 {
 			err = fmt.Errorf("You must specify at least one backend for frontend '%v'", name)
 			return
+		}
+
+		if front.Default {
+			if config.defaultFrontend != nil {
+				err = fmt.Errorf("Only one frontend may be the default")
+				return
+			}
+			config.defaultFrontend = front
 		}
 
 		for _, back := range front.Backends {
