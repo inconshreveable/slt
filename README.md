@@ -63,3 +63,6 @@ Just cd into the directory and "go test".
 
 # Stability
 I run slt in production handling hundreds of thousands of connections daily.
+
+# License
+Apache
