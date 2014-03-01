@@ -214,8 +214,6 @@ func parseArgs() (*Options, error) {
 			"allows you to accept connections to many different backend TLS\n" +
 			"applications on a single port.\n\n" +
 			"%s takes a single argument: the path to a YAML configuration file.\n\n", os.Args[0], os.Args[0])
-		fmt.Fprintf(os.Stderr, "The configuration file format is documented here: https://github.com/inconshreveable/slt\n\n")
-		fmt.Fprintf(os.Stderr, "Author: Alan Shreve (@inconshreveable)\n\n")
 	}
 	flag.Parse()
 
