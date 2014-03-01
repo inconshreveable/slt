@@ -59,18 +59,18 @@ type Server struct {
 	ready chan int
 }
 
-func (s *Server) Run() {
+func (s *Server) Run() error {
 	// bind a port to handle TLS connections
 	l, err := net.Listen("tcp", s.Configuration.BindAddr)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	s.Printf("Serving connections on %v", l.Addr())
 
 	// start muxing on it
 	s.mux, err = vhost.NewTLSMuxer(l, muxTimeout)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	// wait for all frontends to finish
@@ -80,7 +80,7 @@ func (s *Server) Run() {
 	for name, front := range s.Frontends {
 		fl, err := s.mux.Listen(name)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		go s.runFrontend(name, front, fl)
 	}
@@ -115,6 +115,8 @@ func (s *Server) Run() {
 	}
 
 	s.wait.Wait()
+
+	return nil
 }
 
 func (s *Server) runFrontend(name string, front *Frontend, l net.Listener) {
@@ -205,6 +207,16 @@ func (s *RoundRobinStrategy) NextBackend() Backend {
 }
 
 func parseArgs() (*Options, error) {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s <config file>\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "%s is a simple TLS reverse proxy that can multiplex TLS connections\n" +
+			"by inspecting the SNI extension on each incoming connection. This\n" +
+			"allows you to accept connections to many different backend TLS\n" +
+			"applications on a single port.\n\n" +
+			"%s takes a single argument: the path to a YAML configuration file.\n\n", os.Args[0], os.Args[0])
+		fmt.Fprintf(os.Stderr, "The configuration file format is documented here: https://github.com/inconshreveable/slt\n\n")
+		fmt.Fprintf(os.Stderr, "Author: Alan Shreve (@inconshreveable)\n\n")
+	}
 	flag.Parse()
 
 	if len(flag.Args()) != 1 {
@@ -294,10 +306,9 @@ func main() {
 	// read configuration file
 	configBuf, err := ioutil.ReadFile(opts.configPath)
 	if err != nil {
-		fmt.Printf("Failed to read configuration file %s: %v", opts.configPath, err)
+		fmt.Printf("Failed to read configuration file %s: %v\n", opts.configPath, err)
 		os.Exit(1)
 	}
-	fmt.Printf("Read configuration file at: %s", opts.configPath)
 
 	// parse configuration file
 	config, err := parseConfig(configBuf, loadTLSConfig)
@@ -312,5 +323,10 @@ func main() {
 		Logger:        log.New(os.Stdout, "slt ", log.LstdFlags|log.Lshortfile),
 	}
 
-	s.Run()
+	// this blocks unless there's a startup error
+	err = s.Run()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to start slt: %v\n", err)
+		os.Exit(1)
+	}
 }
