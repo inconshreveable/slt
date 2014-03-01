@@ -37,15 +37,15 @@ type Frontend struct {
 	TLSCrt   string    `yaml:"tls_crt"`
 	mux      *vhost.TLSMuxer
 	TLSKey   string `yaml:"tls_key"`
-	Default bool `yaml:"default"`
+	Default  bool   `yaml:"default"`
 
 	strategy  BackendStrategy `yaml:"-"`
 	tlsConfig *tls.Config     `yaml:"-"`
 }
 
 type Configuration struct {
-	BindAddr  string               `yaml:"bind_addr"`
-	Frontends map[string]*Frontend `yaml:"frontends"`
+	BindAddr        string               `yaml:"bind_addr"`
+	Frontends       map[string]*Frontend `yaml:"frontends"`
 	defaultFrontend *Frontend
 }
 
@@ -209,10 +209,10 @@ func (s *RoundRobinStrategy) NextBackend() Backend {
 func parseArgs() (*Options, error) {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s <config file>\n\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "%s is a simple TLS reverse proxy that can multiplex TLS connections\n" +
-			"by inspecting the SNI extension on each incoming connection. This\n" +
-			"allows you to accept connections to many different backend TLS\n" +
-			"applications on a single port.\n\n" +
+		fmt.Fprintf(os.Stderr, "%s is a simple TLS reverse proxy that can multiplex TLS connections\n"+
+			"by inspecting the SNI extension on each incoming connection. This\n"+
+			"allows you to accept connections to many different backend TLS\n"+
+			"applications on a single port.\n\n"+
 			"%s takes a single argument: the path to a YAML configuration file.\n\n", os.Args[0], os.Args[0])
 	}
 	flag.Parse()
