@@ -1,4 +1,4 @@
-slt(1) - multiplex a port for multiple TLS applications with SNI
+slt(8) - multiplex a port for multiple TLS applications with SNI
 ================================================================
 
 ## SYNOPOSIS
