@@ -4,10 +4,10 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"github.com/go-yaml/yaml"
 	vhost "github.com/inconshreveable/go-vhost"
 	"io"
 	"io/ioutil"
-	"launchpad.net/goyaml"
 	"log"
 	"net"
 	"os"
@@ -230,7 +230,7 @@ func parseArgs() (*Options, error) {
 func parseConfig(configBuf []byte, loadTLS loadTLSConfigFn) (config *Configuration, err error) {
 	// deserialize/parse the config
 	config = new(Configuration)
-	if err = goyaml.Unmarshal(configBuf, &config); err != nil {
+	if err = yaml.Unmarshal(configBuf, &config); err != nil {
 		err = fmt.Errorf("Error parsing configuration file: %v", err)
 		return
 	}
