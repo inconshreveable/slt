@@ -170,11 +170,11 @@ func (s *Server) proxyConnection(c net.Conn, front *Frontend) (err error) {
 }
 
 func (s *Server) joinConnections(c1 net.Conn, c2 net.Conn) {
+	defer c1.Close()
+	defer c2.Close()
 	var wg sync.WaitGroup
 	halfJoin := func(dst net.Conn, src net.Conn) {
 		defer wg.Done()
-		defer dst.Close()
-		defer src.Close()
 		n, err := io.Copy(dst, src)
 		s.Printf("Copy from %v to %v failed after %d bytes with error %v", src.RemoteAddr(), dst.RemoteAddr(), n, err)
 	}
