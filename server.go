@@ -4,8 +4,6 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"github.com/go-yaml/yaml"
-	vhost "github.com/inconshreveable/go-vhost"
 	"io"
 	"io/ioutil"
 	"log"
@@ -13,6 +11,9 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/go-yaml/yaml"
+	vhost "github.com/inconshreveable/go-vhost"
 )
 
 const (
@@ -131,7 +132,7 @@ func (s *Server) runFrontend(name string, front *Frontend, l net.Listener) {
 		// accept next connection to this frontend
 		conn, err := l.Accept()
 		if err != nil {
-			s.Printf("Failed to accept new connection for '%v': %v", conn.RemoteAddr())
+			s.Printf("Failed to accept new connection for '%v': %v", conn.RemoteAddr(), err)
 			if e, ok := err.(net.Error); ok {
 				if e.Temporary() {
 					continue
@@ -170,13 +171,15 @@ func (s *Server) proxyConnection(c net.Conn, front *Frontend) (err error) {
 }
 
 func (s *Server) joinConnections(c1 net.Conn, c2 net.Conn) {
+	defer c1.Close()
+	defer c2.Close()
 	var wg sync.WaitGroup
 	halfJoin := func(dst net.Conn, src net.Conn) {
 		defer wg.Done()
-		defer dst.Close()
-		defer src.Close()
 		n, err := io.Copy(dst, src)
-		s.Printf("Copy from %v to %v failed after %d bytes with error %v", src.RemoteAddr(), dst.RemoteAddr(), n, err)
+		if err != nil {
+			s.Printf("Copy from %v to %v failed after %d bytes with error %v", src.RemoteAddr(), dst.RemoteAddr(), n, err)
+		}
 	}
 
 	s.Printf("Joining connections: %v %v", c1.RemoteAddr(), c2.RemoteAddr())
@@ -289,7 +292,18 @@ func loadTLSConfig(crtPath, keyPath string) (*tls.Config, error) {
 	}
 
 	return &tls.Config{
-		Certificates: []tls.Certificate{cert},
+		Certificates:             []tls.Certificate{cert},
+		MinVersion:               tls.VersionTLS12,
+		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
+		PreferServerCipherSuites: true,
+		CipherSuites: []uint16{
+			tls.TLS_AES_128_GCM_SHA256,                      // TLS 1.3
+			tls.TLS_AES_256_GCM_SHA384,                      // TLS 1.3
+			tls.TLS_CHACHA20_POLY1305_SHA256,                // TLS 1.3
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,       // TLS 1.2
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,       // TLS 1.2
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256, // TLS 1.2
+		},
 	}, nil
 }
 
