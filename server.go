@@ -132,7 +132,7 @@ func (s *Server) runFrontend(name string, front *Frontend, l net.Listener) {
 		// accept next connection to this frontend
 		conn, err := l.Accept()
 		if err != nil {
-			s.Printf("Failed to accept new connection for '%v': %v", conn.RemoteAddr())
+			s.Printf("Failed to accept new connection for '%v': %v", conn.RemoteAddr(), err)
 			if e, ok := err.(net.Error); ok {
 				if e.Temporary() {
 					continue
