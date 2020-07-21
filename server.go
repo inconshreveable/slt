@@ -292,7 +292,18 @@ func loadTLSConfig(crtPath, keyPath string) (*tls.Config, error) {
 	}
 
 	return &tls.Config{
-		Certificates: []tls.Certificate{cert},
+		Certificates:             []tls.Certificate{cert},
+		MinVersion:               tls.VersionTLS12,
+		CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
+		PreferServerCipherSuites: true,
+		CipherSuites: []uint16{
+			tls.TLS_AES_128_GCM_SHA256,                      // TLS 1.3
+			tls.TLS_AES_256_GCM_SHA384,                      // TLS 1.3
+			tls.TLS_CHACHA20_POLY1305_SHA256,                // TLS 1.3
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,       // TLS 1.2
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,       // TLS 1.2
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256, // TLS 1.2
+		},
 	}, nil
 }
 
