@@ -1,4 +1,4 @@
-module github.com/AgentZombie/slt
+module github.com/inconshreveable/slt
 
 go 1.14
 
