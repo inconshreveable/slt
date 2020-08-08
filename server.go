@@ -1,11 +1,10 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"github.com/go-yaml/yaml"
-	vhost "github.com/inconshreveable/go-vhost"
 	"io"
 	"io/ioutil"
 	"log"
@@ -13,6 +12,11 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/go-yaml/yaml"
+	vhost "github.com/inconshreveable/go-vhost"
+	"golang.org/x/crypto/acme"
+	"golang.org/x/crypto/acme/autocert"
 )
 
 const (
@@ -32,12 +36,13 @@ type Backend struct {
 }
 
 type Frontend struct {
-	Backends []Backend `yaml:"backends"`
-	Strategy string    `yaml:"strategy"`
-	TLSCrt   string    `yaml:"tls_crt"`
-	mux      *vhost.TLSMuxer
-	TLSKey   string `yaml:"tls_key"`
-	Default  bool   `yaml:"default"`
+	Backends        []Backend `yaml:"backends"`
+	Strategy        string    `yaml:"strategy"`
+	TLSCrt          string    `yaml:"tls_crt"`
+	mux             *vhost.TLSMuxer
+	TLSKey          string `yaml:"tls_key"`
+	Default         bool   `yaml:"default"`
+	LetsEncryptPath string `yaml:"lets_encrypt_path"`
 
 	strategy  BackendStrategy `yaml:"-"`
 	tlsConfig *tls.Config     `yaml:"-"`
@@ -275,6 +280,25 @@ func parseConfig(configBuf []byte, loadTLS loadTLSConfigFn) (config *Configurati
 			if front.tlsConfig, err = loadTLS(front.TLSCrt, front.TLSKey); err != nil {
 				err = fmt.Errorf("Failed to load TLS configuration for frontend '%v': %v", name, err)
 				return
+			}
+		} else if front.LetsEncryptPath != "" {
+			hostPolicy := func(ctx context.Context, host string) error {
+				// Note: change to your real host
+				if host == name {
+					return nil
+				}
+				return fmt.Errorf("acme/autocert: only %s host is allowed", name)
+			}
+
+			m := &autocert.Manager{
+				Prompt:     autocert.AcceptTOS,
+				HostPolicy: hostPolicy,
+				Cache:      autocert.DirCache(front.LetsEncryptPath),
+			}
+
+			front.tlsConfig = &tls.Config{
+				GetCertificate: m.GetCertificate,
+				NextProtos:     []string{acme.ALPNProto},
 			}
 		}
 	}
