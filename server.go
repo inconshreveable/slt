@@ -27,8 +27,8 @@ type Options struct {
 }
 
 type Backend struct {
-	Addr           string `"yaml:addr"`
-	ConnectTimeout int    `yaml:connect_timeout"`
+	Addr           string `yaml:"addr"`
+	ConnectTimeout int    `yaml:"connect_timeout"`
 }
 
 type Frontend struct {
